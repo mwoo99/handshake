@@ -6,41 +6,60 @@
 
 #include "pipe_networking.h"
 
-int client_handshake(int* to){
+
+int server_handshake(int *from){
   MESSAGE_BUFFER_SIZE = 128;
-  
-  mkfifo("hello",0644);
-  *to = open("hello",O_WRONLY);
-  
-  mkfifo(getpid(),0644);
-  int ret = open(getpid(),O_RDONLY);
-  
-  write(*to,getpid(),sizeof(int));
-  
-  char message[128];
-  read(ret,&message,sizeof(message));
-  //remove private pipe here.
-  
-  return ret;
+  char buffer[MESSAGE_BUFFER_SIZE];
+
+  //1. Server creates a FIFO (Well Known Pipe)
+  mkfifo("wkp",0644);
+  printf("[SERVER] WKP Created\n");
+  int pipe = open("wkp",O_RDONLY);
+  *from = pipe;
+
+
+  //2. Server waits for a connection
+  printf("[SERVER] waiting for client\n");
+  read(pipe,buffer,sizeof(buffer));
+
+  //6. Server receives client’s message and removes the WKP
+  printf("[SERVER] Received: %s\n", buffer);
+  close(pipe);
+  remove("wkp");
+
+//7. Server connects to client FIFO, sending an initial acknowledgement message.
+  int message = open (buffer, O_WRONLY);
+  write(message, "boi", 10); 
+  printf("[SERVER] message of acknowledgement sent\n");
+  return message;
 }
 
-int server_handshake(int* from){
+int client_handshake(int* to){
   MESSAGE_BUFFER_SIZE = 128;
-  
-  mkfifo("hello",0644);
-  *from = open("hello",O_RDONLY);
-  
-  int cpid;
-  read(*from,&cpid,sizeof(int));
+  char buffer[MESSAGE_BUFFER_SIZE];
 
-  mkfifo(cpid,0644);
-  int ret = open(cpid,O_WRONLY); 
+  //3. Client create a “private” FIFO
+  mkfifo("pp",0644);
+  *to = open("pp",O_WRONLY);
+  printf("[CLIENT] PP Created");
+
+  //4. Client connects to server and send the private FIFO name
+  //*to = open("WKP", O_WRONLY);
+  int pipe = open("wkp", O_WRONLY);
+  write(pipe,"pp",10);
+  printf("[CLIENT] private FIFO name sent\n");
+
+  //5. Client waits for a message from the server
+  //read(pp, buffer, sizeof(buffer));
+  int message = open("pp",O_RDONLY);
+  read(message, buffer, 10);
   
-  char c[3] = "hey";
-  write(ret, c, sizeof(c)); 
-  //remove wkp here
-  
-  char message[128];
-  read(*from, &message, sizeof(message));
-  
+  //8. Client receives server’s message, removes its private
+  //printf("[CLIENT] Message from Server: %s\n",message);
+  printf("[CLIENT] Server has connected. \n");
+
+
+  //9. Client sends acknowledgement message.
+  //write(*to, "fin", 10);
+  remove("pp");
 }
